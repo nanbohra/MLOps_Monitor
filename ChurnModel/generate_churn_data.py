@@ -4,8 +4,8 @@ from churn_data import ChurnDataGenerator, generate_drift_stream
 
 generator = ChurnDataGenerator()
 
-baseline_data = generator.generate_batch(num_customers=10000, base_churn_rate=0.3)
-baseline_data = generator.add_y_noise(baseline_data, noise_rate=0.15)
+baseline_data = generator.generate_batch(num_customers=10000, base_churn_rate=0.4)
+baseline_data = generator.add_y_noise(baseline_data, noise_rate=0.25)
 baseline_data.to_csv('baseline_train.csv', index=False)
 
 print(f"Total customers: {len(baseline_data)}")
@@ -15,10 +15,10 @@ print(baseline_data.groupby('churned')[['days_since_purchase', 'email_open_rate'
 
 batches = generate_drift_stream(
     generator=generator,
+    magnitude=0.7,
+    drift_starts=5,
     num_batches=20,
-    cust_per_batch=100,
-    drift_starts=10,
-    magnitude=0.5
+    cust_per_batch=100
 )
 
 os.makedirs('data/streaming', exist_ok=True)

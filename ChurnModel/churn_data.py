@@ -9,21 +9,21 @@ class ChurnDataGenerator:
                 'account_age' : (300,100),
                 'total_purchases' : (20,10),
                 'avg_purchase_value' : (200,100),
-                'days_since_purchase' : (20,10),
+                'days_since_purchase' : (30,20),
                 'login_weekly_frequency': (20,10),
-                'complaints_raised': (4,3),
+                'complaints_raised': (5,3),
                 'avg_product_rating_5': (4,1),
-                'email_open_rate': (0.55,0.2)
+                'email_open_rate': (0.55,0.25)
             },
             'churned' : {
                 'account_age' : (180,120),
-                'total_purchases' : (5,2),
+                'total_purchases' : (10,8),
                 'avg_purchase_value' : (150,80),
-                'days_since_purchase' :(80,40) ,
-                'login_weekly_frequency': (4,2),
-                'complaints_raised': (10,5),
+                'days_since_purchase' :(60,40) ,
+                'login_weekly_frequency': (15,10),
+                'complaints_raised': (8,5),
                 'avg_product_rating_5': (3,2),
-                'email_open_rate': (0.1,0.05)
+                'email_open_rate': (0.25,0.15)
             }
         }
 
@@ -100,10 +100,10 @@ class ChurnDataGenerator:
             for feature, (mean,std) in self.distributions[churn_type].items():
                 
                 if feature == 'email_open_rate':
-                    new_mean = mean * (1-magnitude * 0.8)
+                    new_mean = mean * (1-magnitude)
                 
                 elif feature == 'total_purchases':
-                    new_mean = mean * (1-magnitude * 0.5)
+                    new_mean = mean * (1-magnitude)
                 
                 elif feature == 'days_since_purchase':
                     new_mean = mean * (1+magnitude)
@@ -126,15 +126,17 @@ def generate_drift_stream(generator, magnitude, drift_starts, num_batches, cust_
 
     for batch_num in range(num_batches):
         if batch_num < drift_starts:
-            magnitude = 0.0
+            use_magnitude = 0.0
             
         else:
             progress = (batch_num - drift_starts) / (num_batches - drift_starts)
-            magnitude = magnitude * progress
+            print(f"Progress={progress}")
+            use_magnitude = magnitude * progress
+        print(f"Using magnitude: {use_magnitude}")
             
 
         if magnitude > 0.0:
-            generator.apply_drift(magnitude)
+            generator.apply_drift(use_magnitude)
             use_drift = True
         else:
             use_drift= False
@@ -142,7 +144,7 @@ def generate_drift_stream(generator, magnitude, drift_starts, num_batches, cust_
 
         batch = generator.generate_batch(num_customers=cust_per_batch,use_drift=use_drift)
         batch['batch_num'] = batch_num
-        batch['drift_magnitude'] = magnitude
+        batch['drift_magnitude'] = use_magnitude
 
         streamed_data.append(batch)
 
