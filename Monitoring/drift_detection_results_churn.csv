@@ -1,0 +1,21 @@
+,batch_num,drift_magnitude,is_drifted,overall_drift_score,num_drift_features,drifted_features
+0,0,0.0,False,0.0,0,[]
+1,1,0.0,False,0.0,0,[]
+2,2,0.0,False,0.125,1,['account_age']
+3,3,0.0,False,0.125,1,['account_age']
+4,4,0.0,False,0.25,2,"['account_age', 'avg_product_rating_5']"
+5,5,0.0,False,0.0,0,[]
+6,6,0.0466666666666666,False,0.125,1,['avg_product_rating_5']
+7,7,0.0933333333333333,False,0.0,0,[]
+8,8,0.1399999999999999,False,0.0,0,[]
+9,9,0.1866666666666666,False,0.25,2,"['total_purchases', 'avg_purchase_value']"
+10,10,0.2333333333333333,False,0.25,2,"['total_purchases', 'email_open_rate']"
+11,11,0.2799999999999999,True,0.5,4,"['total_purchases', 'days_since_purchase', 'avg_product_rating_5', 'email_open_rate']"
+12,12,0.3266666666666666,True,0.5,4,"['total_purchases', 'days_since_purchase', 'complaints_raised', 'email_open_rate']"
+13,13,0.3733333333333333,True,0.5,4,"['total_purchases', 'login_weekly_frequency', 'complaints_raised', 'email_open_rate']"
+14,14,0.42,True,0.625,5,"['total_purchases', 'days_since_purchase', 'login_weekly_frequency', 'avg_product_rating_5', 'email_open_rate']"
+15,15,0.4666666666666666,True,0.5,4,"['total_purchases', 'days_since_purchase', 'login_weekly_frequency', 'email_open_rate']"
+16,16,0.5133333333333333,True,0.75,6,"['total_purchases', 'days_since_purchase', 'login_weekly_frequency', 'complaints_raised', 'avg_product_rating_5', 'email_open_rate']"
+17,17,0.5599999999999999,True,0.5,4,"['total_purchases', 'days_since_purchase', 'login_weekly_frequency', 'email_open_rate']"
+18,18,0.6066666666666667,True,0.5,4,"['total_purchases', 'days_since_purchase', 'login_weekly_frequency', 'email_open_rate']"
+19,19,0.6533333333333333,True,0.625,5,"['total_purchases', 'days_since_purchase', 'login_weekly_frequency', 'complaints_raised', 'email_open_rate']"

@@ -34,7 +34,7 @@ class DriftDetector:
             current_values = current_features[feature]
 
             result = stats.ks_2samp(reference_values, current_values)
-            is_drifted = result.p_value < threshold
+            is_drifted = result.pvalue < threshold
             drift_direction = 'none'
 
             if is_drifted:
@@ -47,12 +47,12 @@ class DriftDetector:
             mean_shift = ((current_mean - reference_mean) / reference_mean) if reference_mean != 0 else 0
 
             drift_stats['feature_stats'][feature] = {
-                'ks_statistic' : result.statistic,
-                'p_value' : result.p_value,
+                'ks_statistic' : float(result.statistic),
+                'p_value' : float(result.pvalue),
                 'is_drifted': bool(is_drifted),
                 'drift_direction': drift_direction,
-                'current_batch_mean': current_mean,
-                'mean_shift':mean_shift * 100.0
+                'current_batch_mean': float(current_mean),
+                'mean_shift': float(mean_shift * 100.0)
             }
 
         
