@@ -37,4 +37,53 @@ from datetime import datetime
 
 class PerformanceEvaluator:
     def __init__(self, track_metrics=None, window_size=10, percentile=5, min_history=5, cooldown=5):
+        self.track_metrics = track_metrics or ['accuracy', 'precision', 'f1', 'recall', 'roc_auc']
+        self.window_size = window_size
+        self.percentile = percentile
+        self.min_history = min_history
+        self.cooldown = cooldown
+
+        self.history = deque(maxlen=window_size) # maintains rolling window of history to track metrics from
+        self.last_retrain_batch_num = None
+
+
+        def evaluate_batch(self, y_true, y_pred, y_pred_probs):
+            return {
+                'accuracy': accuracy_score(y_true, y_pred),
+                'precision': precision_score(y_true, y_pred, zero_division=0),
+                'recall': recall_score(y_true, y_pred, zero_division=0),
+                'f1': f1_score(y_true, y_pred, zero_division=0),
+                'roc_auc': roc_auc_score(y_true, y_pred_probs)
+            }
         
+        def get_thresholds(self):
+            if len(self.history) < self.min_history:
+                return None # if we dont have enough data yet, no thresholds for metrics yet
+            
+            return {
+                metric : float(np.percentile([b[metric] for b in self.history], self.percentile))
+                for metric in self.track_metrics
+            }
+        
+        def check_degradation(self, metrics):
+            thresholds = self.get_thresholds()
+
+            if thresholds is None:
+                return False, [], None
+            
+            failed_metrics = [
+                {'metric' : m, 'value': metrics[m], 'threshold': thresholds[m], 'gap': metrics[m] - thresholds[m]}
+                for m in self.track_metrics if metrics[m] < thresholds[m]
+            ]
+
+            return len(failed_metrics) > 0, failed_metrics, thresholds
+        
+
+        def in_cooldown(self, current_batch_num):
+            if self.last_retrain_batch_num is None: # if retraining never happened
+                return False # then can't be in cooldown
+            
+            return (current_batch_num - self.last_retrain_batch_num) < self.cooldown
+
+
+
