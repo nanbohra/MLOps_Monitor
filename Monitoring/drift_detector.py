@@ -9,14 +9,17 @@ class DriftDetector:
         self.reference_data = reference_data[features]
         self.features = features
 
-        self.reference_stats = {
+        self.reference_stats = { # create baseline stats
             'reference_means': self.reference_data.mean().to_dict(),
             'reference_std': self.reference_data.std().to_dict(),
             'size': len(self.reference_data)
         }
+
+        print(f"Drift detector initialized with {self.reference_stats['size']} reference samples.")
     
 
     def detect_drift(self, current_batch_data, threshold=0.05):
+        # centered on KS test of distributions, 2sample to check if data comes from the same dist
         current_features = current_batch_data[self.features]
 
         drift_stats = {
@@ -29,21 +32,22 @@ class DriftDetector:
         }
 
         num_drifted = 0
+
         for feature in self.features:
+            # for each feature, compare curr batch data against reference batch data
             reference_values = self.reference_data[feature]
             current_values = current_features[feature]
 
             result = stats.ks_2samp(reference_values, current_values)
             is_drifted = result.pvalue < threshold
-            drift_direction = 'none'
 
             if is_drifted:
-                drift_direction = 'increased' if result.statistic_sign == -1 else 'decreased'
                 num_drifted += 1
                 drift_stats['drifted_features'].append(feature)
 
             reference_mean = self.reference_stats['reference_means'][feature]
             current_mean = current_values.mean()
+            drift_direction = 'increased' if current_mean > reference_mean else 'decreased'
             mean_shift = ((current_mean - reference_mean) / reference_mean) if reference_mean != 0 else 0
 
             drift_stats['feature_stats'][feature] = {

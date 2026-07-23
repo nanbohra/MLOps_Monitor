@@ -31,18 +31,22 @@ class ChurnDataGenerator:
 
     
     def generate_customer(self, id, source, base_churn_rate=0.3):
+        # decide if customer churns
         will_churn = np.random.random() < base_churn_rate
 
+        # set distribution source based on churn status
         if will_churn:
             distribution = source['churned']
         else:
             distribution = source['non_churned']
 
+        # generate feature values for customer based on churn status / dist
         customer = {'customer_id' : id}
         for feature in distribution:
             mean, std = distribution[feature]
             value = np.random.normal(mean, std)
-
+            
+            # set some restrictions on certain feature values
             if feature == 'email_open_rate':
                 value = np.clip(value, 0,1)
             elif feature == 'avg_product_rating_5':
@@ -56,7 +60,7 @@ class ChurnDataGenerator:
 
         customer['churned'] = 1 if will_churn else 0 
 
-        return customer
+        return customer # fully formed customer profile
     
 
     def generate_batch(self,num_customers, base_churn_rate=0.3, use_drift=False):
@@ -78,6 +82,8 @@ class ChurnDataGenerator:
 
 
     def add_y_noise(self, customers, noise_rate=0.15):
+        # above generation creates too clean data
+        # adding noise to distributions by randomly flipping some y labels
         customers = customers.copy()
 
         num_flips = int(len(customers)*noise_rate)
@@ -90,7 +96,10 @@ class ChurnDataGenerator:
     
     
 
-    def apply_drift(self, magnitude=0.3):
+    def apply_feature_drift(self, magnitude=0.3):
+        # magnitude scaled linearly with progress factor over batches
+        # to gradually introduce feature drift
+
         self.distribution_drift = {
             'non_churned':{},
             'churned':{}
@@ -100,28 +109,28 @@ class ChurnDataGenerator:
             for feature, (mean,std) in self.distributions[churn_type].items():
                 
                 if feature == 'email_open_rate':
-                    new_mean = mean * (1-magnitude)
+                    new_mean = mean * (1-magnitude) # decline email opening rate for both churn types
                 
                 elif feature == 'total_purchases':
-                    new_mean = mean * (1-magnitude)
+                    new_mean = mean * (1-magnitude) # decline total purchases for both churn types
                 
                 elif feature == 'days_since_purchase':
-                    new_mean = mean * (1+magnitude)
+                    new_mean = mean * (1+magnitude) # increase time since last purchase
                 
                 elif feature == 'login_weekly_frequency':
-                    new_mean = mean * (1-magnitude *0.5)
+                    new_mean = mean * (1-magnitude *0.5) # reduce login freq
                 
                 elif feature == 'complaints_raised':
-                    new_mean = mean * (1-magnitude * 0.3)
+                    new_mean = mean * (1-magnitude * 0.3) # increase complaints raised
 
                 else:
-                    new_mean = mean * (1-magnitude * 0.1)
+                    new_mean = mean * (1-magnitude * 0.1) # minor disruption to other feature means
             
                 self.distribution_drift[churn_type][feature] = (new_mean,std)
     
 
 def generate_drift_stream(generator, magnitude, drift_starts, num_batches, cust_per_batch):
-        
+    # introduce gradual feature drift starting at batch drift_starts during data generation
     streamed_data = []
 
     for batch_num in range(num_batches):
@@ -136,7 +145,7 @@ def generate_drift_stream(generator, magnitude, drift_starts, num_batches, cust_
             
 
         if magnitude > 0.0:
-            generator.apply_drift(use_magnitude)
+            generator.apply_drift(use_magnitude) # update distribution gradually
             use_drift = True
         else:
             use_drift= False
