@@ -129,7 +129,7 @@ class ChurnDataGenerator:
                 self.distribution_drift[churn_type][feature] = (new_mean,std)
     
 
-def generate_drift_stream(generator, magnitude, drift_starts, num_batches, cust_per_batch):
+def generate_drift_stream(generator, magnitude, drift_starts, ramp_period, num_batches, cust_per_batch):
     # introduce gradual feature drift starting at batch drift_starts during data generation
     streamed_data = []
 
@@ -138,14 +138,15 @@ def generate_drift_stream(generator, magnitude, drift_starts, num_batches, cust_
             use_magnitude = 0.0
             
         else:
-            progress = (batch_num - drift_starts) / (num_batches - drift_starts)
+            ramp_end = drift_starts + ramp_period # drift occurs over 15 batches then plateaus 
+            progress = min(1.0, (batch_num - drift_starts) / (ramp_end - drift_starts))
             print(f"Progress={progress}")
             use_magnitude = magnitude * progress
         print(f"Using magnitude: {use_magnitude}")
             
 
-        if magnitude > 0.0:
-            generator.apply_drift(use_magnitude) # update distribution gradually
+        if use_magnitude > 0.0:
+            generator.apply_feature_drift(use_magnitude) # update distribution gradually
             use_drift = True
         else:
             use_drift= False
