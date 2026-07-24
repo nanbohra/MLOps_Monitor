@@ -68,5 +68,29 @@ class DriftDetector:
 
     def detect_pred_drift():
         # TODO
+        # detecting whether prediction probability distributions have shifted
+        # i.e. if feature drifts have had meaningful downstream effect on label distributions
+        # OR if label probabilities have changed despite no feature drift (rare)
+        # re-evaluate its need here
+        # doesn't provide any independent signal for retraining necessity beyond minor additional filter
+        # i.e. if feature drift detected but no change in pred probs -- is data drift really sig enough to warrant retraining?
         pass
+
+    def update_reference(self, new_reference_data):
+        # after retraining a model, old reference data distributions are outdated
+        # so drifts may be flagged relative to old distributions even if retrained model 
+        # is operating on new distributions since retraining
+        # so we update reference distributions to more accurately detect drift after retrains
+
+        # mirrors PerformanceEvaluator's notify_retrain()
+
+        self.reference_data = new_reference_data[self.features]
+        self.reference_stats = {
+            'reference_means' : self.reference_data.mean().to_dict(),
+            'reference_std' : self.reference_data.std().to_dict(),
+            'size': len(self.reference_data)
+        }
+
+        print(f"Drift detector reference updated with {self.reference_stats['size']} samples.")
+
 
