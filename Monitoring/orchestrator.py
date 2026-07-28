@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import joblib
 
-from sklearn.metrics import f1_score, accuracy_score
+from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score
 
 from drift_detector import DriftDetector
 from performance_eval import PerformanceEvaluator
@@ -138,7 +138,7 @@ class Orchestrator:
         # concat all batch data in seen_data list for eventual retraining
         return pd.concat(self.seen_data, ignore_index=False)
     
-    def _run_shadow_test():
+    def _run_shadow_test(self, batch_df, batch_num):
         # TODO
         # collect feature data + ground truths 
         # run drift detection on data, but not passed to alert manager, since alerts are paused during shadow testing
@@ -148,8 +148,50 @@ class Orchestrator:
         # create logs for all sensors
         # if we've run teh challenger for enough test batches, send to promotion evaluation
 
-    def _evaluate_promotion():
-        # TODO
+        X = batch_df[self.features]
+        y_true = batch_df[self.target]
+
+        drift_result = self.drift_detector.detect_drift(batch_df)
+
+        old_pred, old_probs = self._predict(self.model, self.scaler, X)
+        old_perf_result = self.performance_evaluator.process_batch(y_true, old_pred, old_probs) # CHECK IF WE HAVE TO SAVE THIS
+
+        new_model, new_scaler = self.shadow_challenger
+        new_pred, new_probs = self._predict(new_model, new_scaler, X)
+        
+        self.shadow_results.append({
+            'batch_num': batch_num,
+            'old_f1': f1_score(y_true, old_pred, zero_division=0),
+            'new_f1': f1_score(y_true, new_pred, zero_division=0),
+            'old_precision': precision_score(y_true, old_pred, zero_division=0),
+            'new_precision': precision_score(y_true, new_pred, zero_division=0),
+            'old_recall': recall_score(y_true, old_pred, zero_division=0),
+            'new_recall': recall_score(y_true, new_pred, zero_division=0),
+            'old_accuracy': accuracy_score(y_true, old_pred),
+            'new_accuracy': accuracy_score(y_true, new_pred)
+        })
+
+        record = {
+            'batch_num': batch_num,
+            'state': 'SHADOW_TEST',
+            'production_f1': self.shadow_results[-1]['old_f1'],
+            'production_accuracy': self.shadow_results[-1]['old_accuracy'],
+            'old_f1': self.shadow_results[-1]['old_f1'],
+            'new_f1': self.shadow_results[-1]['new_f1'],
+            'drift_score': drift_result['overall_drift_score'],
+            'shadow_progress': f"{len(self.shadow_results)}/{self.shadow_target_batches}"
+        }
+
+        print(f"Batch {batch_num:02d} [SHADOW_TEST {len(self.shadow_results)}/{self.shadow_target_batches}]: "
+          f"old_F1={record['old_f1']:.3f} vs new_F1={record['new_f1']:.3f} | drift={drift_result['overall_drift_score']:.1%}")
+        
+        if len(self.shadow_results) >= self.shadow_target_batches:
+            self._evaluate_promotion(batch_num)
+        
+        return record
+
+
+    def _evaluate_promotion(self, batch_num):
         # evaluate metrics across shadow testing to see which model prevails
         # CURRENT CRITERION FOR PROMOTION: improved avg f1
         # check against config threshold if avg f1 has improved 
@@ -160,12 +202,35 @@ class Orchestrator:
         # reset state
         # ELSE discard challenger if it didn't outperform
             # retraining will be re-attempted after cooldown
+        avg_old_f1 = np.mean([result['old_f1'] for result in self.shadow_results])
+        avg_new_f1 = np.mean([result['new_f1'] for result in self.shadow_results])
+        improvement = avg_new_f1 - avg_old_f1
 
-    def save_log():
-        # TODO
+        threshold = self.config.get('promotion_f1_improvement', 0.02)
+        should_promote = improvement > threshold
+
+
+        if should_promote:
+            print(f"   --- PROMOTING challenger to production.")
+            new_model, new_scaler = self.shadow_challenger
+            self.model = new_model
+            self.scaler = new_scaler
+
+            self.drift_detector.update_reference(self._all_seen_data())
+            self.performance_evaluator.notify_retrain(batch_num)
+
+        else:
+            print(f"   --- Challenger did not outperform. Discarding.")
+
+        self.alert_manager.reset_streak()
+
+        self.shadow_challenger = None
+        self.shadow_results = []
+        self.state = 'MONITORING'
+
+        
+
+    def save_log(self, path='monitoring_log.csv'):
         # save logs to CSV
-    
-
-
-
-    
+        pd.DataFrame(self.batch_log).to_csv(path, index=False)
+        print(f"Saved log at path {path}.")
