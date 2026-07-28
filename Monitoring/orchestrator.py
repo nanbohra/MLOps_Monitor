@@ -38,22 +38,32 @@ class Orchestrator:
 
         # states, setup for shadow challengers
         self.state = 'MONITORING'
-        self.shadow_challenger = None
+        self.shadow_challenger = None # tuple of model, scaler
         self.shadow_results = []
         self.shadow_target_batches = config.get('shadow_target_batches',4) # perform better on 4 shadow batches to be promoted to production
 
         # history
         self.batch_log = []
 
-    def process_batch():
-        # TODO
+    def process_batch(self, batch_df, batch_num):
         # records batch data into seen_data unconditionally for eventual retraining
         # triggers monitors based on state (monitoring vs. shadow)
         # sends batch records from ^ to log
 
+        self.seen_data.append(batch_df)
+
+        if self.state == 'MONITORING':
+            record = self._run_monitoring(batch_df, batch_num)
+        elif self.state == 'SHADOW_TEST':
+            record = self._run_shadow_test(batch_df, batch_num)
+        else:
+            raise ValueError(f'Unknown state: {self.state}.')
+        
+        self.batch_log.append(record)
+        return record
+
     # support functions
-    def _run_monitoring():
-        # TODO
+    def _run_monitoring(self, batch_df, batch_num):
         # feed data features into drift detector
         # feed predictions vs ground truths into performance eval
         # feed detector data into alert manager
@@ -61,22 +71,72 @@ class Orchestrator:
         # collate specific information into a record for logging
         # trigger retraining if required
 
+        X = batch_df[self.features] 
+        y_true = batch_df[self.target]
 
-    def _predict():
-        # TODO
+        y_pred, y_probs = self._predict(self.model, self.scaler, X)
+
+        drift_result = self.drift_detector.detect_drift(batch_df)
+        perf_result = self.performance_evaluator.process_batch(
+            y_true=y_true, y_pred=y_pred, y_pred_probs=y_probs, batch_num=batch_num
+        )
+        alert = self.alert_manager.evaluate(batch_num, drift_result, perf_result)
+
+        # records between monitoring state and shadowtest state are not identical in structure
+        # but overlapping fields to create congruency
+        record = {
+            'batch_num': batch_num,
+            'state': 'MONITORING',
+            'alert_level': alert['level'],
+            'production_f1': perf_result['metrics']['f1'],
+            'production_acc': perf_result['metrics']['accuracy'],
+            'drift_score': drift_result['overall_drift_score'],
+            'should_retrain': alert['should_retrain']
+        }
+
+        print(f"Batch {batch_num:02d} [MONITORING]: {alert['level']} | "
+              f"F1={perf_result['metrics']['f1']:.3f} | "
+              f"drift={drift_result['overall_drift_score']:.1%}")
+        
+        if alert['should_retrain']:
+            self._start_retrain(batch_num)
+
+        return record
+
+
+    def _predict(self, model, scaler, X):
         # useful for shadow testing with parameterized model pieces
         # run inference on both models concurrently
 
+        X_scaled = scaler.transform(X)
+        y_pred = model.predict(X_scaled)
+        y_probs = model.predict_proba(X_scaled)[:, 1]
+        return y_pred, y_probs
+        
     
-    def _start_retrain():
-        # TODO
+    def _start_retrain(self, batch_num):
         # collates training data to send to retrainer
         # trigger retraining with imported function
         # handles state change
-    
-    def _all_seen_data():
-        # TODO
+        print(f"------ Retrain triggered at batch {batch_num}. Training challenger.")
+
+        train_data = self._all_seen_data()
+        challenger_model, challenger_scaler = train_challenger(
+            training_data=train_data,
+            features=self.features,
+            target=self.target
+        )
+
+        self.shadow_challenger = (challenger_model,challenger_scaler)
+        self.shadow_results = []
+        self.state = 'SHADOW_TEST'
+
+        print(f"------ Challenger trained on {len(train_data)} samples. "
+              f"Entering SHADOW TEST for next {self.shadow_target_batches} batches.")
+        
+    def _all_seen_data(self):
         # concat all batch data in seen_data list for eventual retraining
+        return pd.concat(self.seen_data, ignore_index=False)
     
     def _run_shadow_test():
         # TODO
@@ -105,7 +165,7 @@ class Orchestrator:
         # TODO
         # save logs to CSV
     
-    
+
 
 
     
