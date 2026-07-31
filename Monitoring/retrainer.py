@@ -3,7 +3,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.utils.class_weight import compute_class_weight
 
-def train_challenger(training_data, features, target='churned', random_state=42):
+def train_challenger(training_data, features, target='churned', random_state=42, sample_weights=None):
     # train a new model given whichever training data
     # agnostic from orchestrator and alert system
     # just performs training congruent to that of baseline model
@@ -21,12 +21,18 @@ def train_challenger(training_data, features, target='churned', random_state=42)
     X_scaled = scaler.fit_transform(X)
 
     class_weights = compute_class_weight('balanced', classes=np.array([0,1]), y=y)
+    per_class_weight = {0: class_weights[0], 1: class_weights[1]}
+
     model = LogisticRegression(
         random_state=random_state,
         max_iter=1000,
-        class_weight={0: class_weights[0], 1: class_weights[1]}
+        class_weight=per_class_weight
     )
 
-    model.fit(X_scaled, y)
+    if sample_weights is not None:
+        combined_weights = sample_weights * y.map(per_class_weight).values
+        model.fit(X_scaled, y, sample_weight=combined_weights)
+    else:
+        model.fit(X_scaled, y)
 
     return model, scaler

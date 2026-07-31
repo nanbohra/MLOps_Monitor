@@ -33,7 +33,7 @@ class Orchestrator:
 
         # init alert manager
         self.alert_manager = AlertManager(
-            consecutive_critical_threshold=config.get('consective_threshold',3)
+            consecutive_critical_threshold=config.get('consecutive_threshold',3)
         )
 
         # states, setup for shadow challengers
@@ -121,22 +121,33 @@ class Orchestrator:
         print(f"------ Retrain triggered at batch {batch_num}. Training challenger.")
 
         train_data = self._all_seen_data()
+        weights = self._compute_recency_weights(train_data, decay=self.config.get('recency_decay', 0.85))
+
         challenger_model, challenger_scaler = train_challenger(
             training_data=train_data,
             features=self.features,
-            target=self.target
+            target=self.target,
+            sample_weights=weights
         )
 
         self.shadow_challenger = (challenger_model,challenger_scaler)
         self.shadow_results = []
         self.state = 'SHADOW_TEST'
 
-        print(f"------ Challenger trained on {len(train_data)} samples. "
+        print(f"------ Challenger trained on {len(train_data)} samples (recency-weighted). "
               f"Entering SHADOW TEST for next {self.shadow_target_batches} batches.")
-        
+
+    def _compute_recency_weights(self, combined_df, decay=0.85):
+        max_batch = combined_df['batch_num'].max()
+        batch_nums = combined_df['batch_num'].fillna(-1)
+
+        age = max_batch - batch_nums
+        weights = decay ** age
+        return weights.values
+    
     def _all_seen_data(self):
         # concat all batch data in seen_data list for eventual retraining
-        return pd.concat(self.seen_data, ignore_index=False)
+        return pd.concat(self.seen_data, ignore_index=True)
     
     def _run_shadow_test(self, batch_df, batch_num):
         # TODO
@@ -154,7 +165,9 @@ class Orchestrator:
         drift_result = self.drift_detector.detect_drift(batch_df)
 
         old_pred, old_probs = self._predict(self.model, self.scaler, X)
-        old_perf_result = self.performance_evaluator.process_batch(y_true, old_pred, old_probs) # CHECK IF WE HAVE TO SAVE THIS
+        old_perf_result = self.performance_evaluator.process_batch(
+            y_true=y_true, y_pred=old_pred, y_pred_probs=old_probs, batch_num=batch_num
+        ) # CHECK IF WE HAVE TO SAVE THIS
 
         new_model, new_scaler = self.shadow_challenger
         new_pred, new_probs = self._predict(new_model, new_scaler, X)
